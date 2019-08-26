@@ -10,6 +10,7 @@ import com.jakewharton.rxbinding3.widget.afterTextChangeEvents
 import io.reactivex.Observable
 import io.reactivex.rxkotlin.Observables
 import kotlinx.android.synthetic.main.activity_ui.*
+import retrofit2.HttpException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
@@ -37,9 +38,13 @@ class UiActivity : AppCompatActivity(R.layout.activity_ui) {
             .map { it.editable.toString() }
             .switchMap {
                 api.getResult(it)
-                    .retry { attempt, throwable ->
-                        throwable is TimeoutException
-                                && attempt <= 2
+                    .retryWhen {
+                        it.flatMap { throwable ->
+                            when (val isUnauthorized = throwable is HttpException && throwable.code() == 401) {
+                                isUnauthorized -> api.getSomeToken("refresh_token")
+                                else -> Observable.error(throwable)
+                            }
+                        }
                     }
             }
             .subscribe()
@@ -48,6 +53,10 @@ class UiActivity : AppCompatActivity(R.layout.activity_ui) {
     class API {
         fun getResult(keyword: String): Observable<String> {
             return Observable.error(TimeoutException())
+        }
+
+        fun getSomeToken(refresh: String): Observable<String> {
+            return Observable.just("token")
         }
     }
 }
