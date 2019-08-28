@@ -1,24 +1,23 @@
 package com.werockstar.reactivelyusecase
 
 
-import android.annotation.SuppressLint
 import android.os.Bundle
-import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import com.jakewharton.rxbinding3.view.clicks
 import com.jakewharton.rxbinding3.widget.afterTextChangeEvents
 import io.reactivex.Observable
-import io.reactivex.rxkotlin.Observables
+import io.reactivex.Observer
+import io.reactivex.disposables.Disposable
 import kotlinx.android.synthetic.main.activity_ui.*
 import retrofit2.HttpException
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 
 class UiActivity : AppCompatActivity(R.layout.activity_ui) {
 
     private val api by lazy { API() }
+    private val db by lazy { Database() }
 
-    @SuppressLint("CheckResult")
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -40,19 +39,52 @@ class UiActivity : AppCompatActivity(R.layout.activity_ui) {
                 api.getResult(it)
                     .retryWhen {
                         it.flatMap { throwable ->
-                            when (val isUnauthorized = throwable is HttpException && throwable.code() == 401) {
+                            when (val isUnauthorized =
+                                throwable is HttpException && throwable.code() == 401) {
                                 isUnauthorized -> api.getSomeToken("refresh_token")
-                                else -> Observable.error(throwable)
+                                else -> Observable.mergeDelayError(
+                                    api.delete1(),
+                                    api.deleteWasError()
+                                )
                             }
                         }
                     }
             }
             .subscribe()
+
+
+        Observable.mergeDelayError(api.delete1(), api.deleteWasError(), api.delete3())
+            .subscribe()
+    }
+
+    class Database {
+        fun getResult(): Observable<String> {
+            return Observable.just("DB")
+                .delay(100, TimeUnit.MILLISECONDS)
+
+        }
     }
 
     class API {
         fun getResult(keyword: String): Observable<String> {
-            return Observable.error(TimeoutException())
+            return Observable.just("API")
+        }
+
+        fun getResult(): Observable<String> {
+            return Observable.just("API")
+                .delay(50, TimeUnit.MILLISECONDS)
+        }
+
+        fun delete1(): Observable<Unit> {
+            return Observable.empty()
+        }
+
+        fun deleteWasError(): Observable<Unit> {
+            return Observable.empty()
+        }
+
+        fun delete3(): Observable<Unit> {
+            return Observable.empty()
         }
 
         fun getSomeToken(refresh: String): Observable<String> {
